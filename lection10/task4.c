@@ -18,11 +18,10 @@ int main(void)
     for (int z = 0; z < 2 * N - 1; z++)
     {
         int route = (z % 4); // узнаю направление
-        int vector[2];
-        double radian = route * 90 * 3.14 / 180; // Перевод угла в радианы
+        double radian = route * 90 * 3.14 / 180; // Переводим угол в радиан
 
-        // i += 1 * vector[1];
-        // j += 1 * vector[0];
+        vector[0] = rint(cos(radian));
+        vector[1] = rint(sin(radian));
 
         for (int k = 0; k < size; k++)
         {
@@ -45,8 +44,8 @@ int main(void)
         j -= 1 * vector[0];
 
         // сместим i или j по позиции
-        vector[0] = rint(cos(radian));
-        vector[1] = rint(sin(radian));
+        vector[0] = 1 - abs(vector[0]);
+        vector[1] = 1 - abs(vector[1]);
 
         i += 1 * vector[1];
         j += 1 * vector[0];
