@@ -15,3 +15,5 @@
 5. [Лекция 14. fork](./lection14/)
 
 6. [Лекция 15. pthread](./lection15/)
+
+7. [Лекция 16. Mutex, pthread. Симуляция магазина](./lection16/)
