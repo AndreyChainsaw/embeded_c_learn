@@ -1,0 +1,1 @@
+long hashString(char *str);
