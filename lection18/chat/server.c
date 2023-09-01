@@ -8,7 +8,7 @@
 #include "hash.h" /* функция для хэширования имени пользователя */
 #include "listClients.h"
 
-#define SERVER_MESS 0
+#define SERVER_MESS 1
 #define MAX_MSG_SIZE 100
 #define MAX_LEN_NAME 10
 
@@ -17,12 +17,6 @@ struct mbuf {
   char username[MAX_LEN_NAME];
   char mtext[MAX_MSG_SIZE];
 };
-
-struct queueMessage {
-  int msgid;
-  struct clientsList *connUsers;
-};
-
 
 
 int initMessageQueue(char *key) {
@@ -50,41 +44,35 @@ void destroyMessageQueue(int msgid) {
   } 
 }
 
-
-
-// Функция для отдельного потока
-void* forwardMessage(void *packet) {
-  //WARN: переделать эту функцию connUsers не возвращается назад
-  struct queueMessage *messageInfo = (struct queueMessage*)(packet);
-  int msgid = messageInfo->msgid;
-  struct clientsList *connUsers = messageInfo->connUsers;
+void forwardMessage(struct clientsList *connUsers, int msgid) {
 
   struct mbuf message;
 
   while (1) {
     /* Ждем сообщения от клиентов */
+    
     msgrcv(msgid, &message, sizeof(message), SERVER_MESS, 0);
-    printf("Server apply message from %s: %s\n", message.username, message.mtext);
+    printf("Server apply message from %s: [%s]\n", message.username, message.mtext);
 
     /* Проверяем клиента на наличие его в списке подключений
        Если его там нет, то добавляем в список
     */
-    if (isInList(connUsers, message.username) == 0) {
-      push(connUsers, message.username);
-    }
 
-    sprintf(message.mtext, "[%s] %s\n", message.username, message.mtext);
+    struct clientsList *current = connUsers;
+
+    if (isInList(current, message.username) == 0) {
+      push(current, message.username);
+    }
 
     /* Рассылаем сообщения всем подключенным
        пользователям кроме отправителя */
     long hashNameSndr = hashString(message.username);
 
-    while (connUsers != NULL) {
+    while (current != NULL) {
 
-      long hashNameDst = hashString(connUsers->name);
+      long hashNameDst = hashString(current->name);
 
-      //WARN: С этой строкой какая-то проблема. Не срабатывает проверка на отправителя
-      if (hashNameSndr != hashNameDst) {
+      if (hashNameSndr != hashNameDst && hashNameDst != 0) {
 
         message.mtype = hashNameDst;
 
@@ -92,9 +80,7 @@ void* forwardMessage(void *packet) {
         msgsnd(msgid, &message, MAX_MSG_SIZE, 0);
 
       }
-
-      connUsers = connUsers->next;
-
+      current = current->next;
     }
 
     printf("Server end sends\n");
@@ -103,26 +89,11 @@ void* forwardMessage(void *packet) {
 }
 
 int main(int argc, char *argv[]) {
-  struct queueMessage messageInfo;
-  messageInfo.connUsers = initList();
-  messageInfo.msgid = initMessageQueue(argv[0]);
+  struct clientsList *connUsers = initList();
+  int msgid = initMessageQueue(argv[0]);
   
-  /* Инициализируем отдельный поток под
-     прием и отправку сообщений клиентам */
+  forwardMessage(connUsers, msgid);
 
-  //WARN а нужно ли это?
-  pthread_t threadSender;
-
-  pthread_create(&threadSender,NULL,forwardMessage,
-                (void *) &messageInfo);
-
-
-  pthread_join(threadSender, NULL);
-
-
-
-
-
-  destroyMessageQueue(messageInfo.msgid);
+  destroyMessageQueue(msgid);
   return 0;
 }
