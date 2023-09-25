@@ -27,3 +27,5 @@
 11. [Лекция 20. Сигналы](./lection20signals/)
 
 12. [Лекция 21. Сокеты](./lection21sockets/)
+
+13. [Лекция 22. "Highload" серверы](./lection22socketsParallel/)
