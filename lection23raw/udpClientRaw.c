@@ -27,16 +27,16 @@ int main(void) {
     exit(1);
   }
 
+  /* Port не заполняю, так как это делается вручную */
   struct sockaddr_in server;
 
   server.sin_family = AF_INET;
-  server.sin_port = htons(SERVER_PORT);
-
   if (inet_pton(AF_INET, SERVER_ADDRESS, &server.sin_addr) <= 0) {
     perror("inet_pton error");
     exit(1);
   }
 
+  /* заполнение заголовков UDP */
   struct udp_headers udp;
   
   udp.src_port = htons(CLIENT_PORT);
