@@ -29,3 +29,5 @@
 12. [Лекция 21. Сокеты](./lection21sockets/)
 
 13. [Лекция 22. "Highload" серверы](./lection22socketsParallel/)
+
+14. [Лекция 23. Raw сокеты](./lection23raw/)
