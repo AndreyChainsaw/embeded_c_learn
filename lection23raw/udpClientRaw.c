@@ -3,7 +3,9 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+// #include <netinet/ip.h> /* IP_DF */
 #include <arpa/inet.h> /* inet_pton */
+#include <linux/ip.h>
 
 #define CLIENT_PORT 54320
 #define SERVER_PORT 54321
@@ -11,15 +13,21 @@
 
 #define MESSAGE "hello world!!!\n"
 
+
 struct udp_headers {
-  unsigned short src_port;
-  unsigned short dst_port;
-  unsigned short len;
-  unsigned short check_sum;
-  char payload[100];
+  unsigned short     src_port;
+  unsigned short     dst_port;
+  unsigned short     len;
+  unsigned short     check_sum;
+  char               payload[100];
 };
 
-int main(void) {
+struct ip_headers {
+  struct iphdr ip_hdr;
+  struct udp_headers udp_packet;
+};
+
+int createSocket(struct sockaddr_in *server) {
   int sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_UDP);
   socklen_t socklen = sizeof(struct sockaddr_in);
   if (sockfd == -1) {
@@ -27,43 +35,76 @@ int main(void) {
     exit(1);
   }
 
-  /* Port не заполняю, так как это делается вручную */
-  struct sockaddr_in server;
+  int enable = 1;
+  if (setsockopt(sockfd, IPPROTO_IP, IP_HDRINCL, &enable, sizeof(enable)) == -1) {
+    perror("setsockopt error");
+  }
 
-  server.sin_family = AF_INET;
-  if (inet_pton(AF_INET, SERVER_ADDRESS, &server.sin_addr) <= 0) {
+  /* Port не заполняю, так как это делается вручную */
+
+  server->sin_family = AF_INET;
+  if (inet_pton(AF_INET, SERVER_ADDRESS, &server->sin_addr) <= 0) {
     perror("inet_pton error");
     exit(1);
   }
 
-  /* заполнение заголовков UDP */
-  struct udp_headers udp;
-  
-  udp.src_port = htons(CLIENT_PORT);
-  udp.dst_port = htons(SERVER_PORT);
-  memcpy(udp.payload, MESSAGE, strlen(MESSAGE));
-  udp.len = htons(8 + strlen(MESSAGE));
+  return sockfd;
+}
 
-  if (sendto(sockfd, (char*)&udp, sizeof(struct udp_headers), 0, (struct sockaddr*)&server, socklen) == -1) {
+//TODO: getPort (host)
+//TODO: getPayload (host)
+
+void fillUdpHeaders(struct udp_headers *udp) {
+
+  udp->src_port = htons(CLIENT_PORT);
+  udp->dst_port = htons(SERVER_PORT);
+  memcpy(udp->payload, MESSAGE, strlen(MESSAGE));
+  udp->len = htons(8 + strlen(MESSAGE));
+
+}
+
+int main(void) {
+  struct sockaddr_in server;
+  socklen_t socklen = sizeof(struct sockaddr_in);
+  int sockfd = createSocket(&server);
+
+
+  struct ip_headers packet;
+
+  packet.ip_hdr.version = 4;
+  packet.ip_hdr.ihl = 5;
+  packet.ip_hdr.tos = 0;
+  packet.ip_hdr.tot_len = 0; //auto
+  packet.ip_hdr.id = 0; // maybe print random value
+  packet.ip_hdr.frag_off = 0x0040; //disable fragmentation
+  packet.ip_hdr.ttl = 64;
+  packet.ip_hdr.protocol = IPPROTO_UDP;
+  packet.ip_hdr.check = 0; //auto
+  packet.ip_hdr.addrs.saddr = 0; //auto
+  inet_pton(AF_INET, SERVER_ADDRESS, &packet.ip_hdr.addrs.daddr);
+
+
+  /* заполнение заголовков UDP */
+  fillUdpHeaders(&packet.udp_packet);
+
+
+  if (sendto(sockfd, (char*)&packet, sizeof(struct ip_headers), 0, (struct sockaddr*)&server, socklen) == -1) {
     perror("sendto error");
     exit(1);
   }
 
   while (1) {
-    if (recvfrom(sockfd, (void*)&udp, sizeof(struct udp_headers), 0, (struct sockaddr*)&server, &socklen) == -1) {
+    if (recvfrom(sockfd, (char*)&packet, sizeof(struct ip_headers), 0, (struct sockaddr*)&server, &socklen) == -1) {
       perror("recvfrom error");
       continue;
     }
 
-    /* skip ip_header (20Bytes) and udp src_port(2Bytes) */
-    unsigned short *ptr = (unsigned short*)&udp;
-    ptr += 11;
+    struct udp_headers *udp_packet = &packet.udp_packet;
+
 
     /* Если порт назначения мой, то обработай */
-    if (ntohs(*(ptr)) == CLIENT_PORT) {
-      /* skip dst_port, len, check_summ */
-      ptr += 3;
-      printf("[Reply from server] %s", (char*)ptr);
+    if (ntohs(udp_packet->dst_port) == CLIENT_PORT) {
+      printf("[Reply from server] %s", udp_packet->payload);
     }
   }
 
