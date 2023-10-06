@@ -93,8 +93,7 @@ int main(void) {
     perror("sendto error");
     exit(1);
   }
-  sleep(4);
-  printf("hello\n");
+
   struct packet getPacket;
   memset(&getPacket, 0, sizeof(struct packet));
   
