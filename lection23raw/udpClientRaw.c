@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-// #include <netinet/ip.h> /* IP_DF */
 #include <arpa/inet.h> /* inet_pton */
 #include <linux/ip.h>
 #include <unistd.h>
@@ -53,38 +52,43 @@ int createSocket(struct sockaddr_in *server) {
   return sockfd;
 }
 
-//TODO: getPort (host)
-//TODO: getPayload (host)
+//TODO: getPort (little endian)
+//TODO: getPayload (little endian)
 
 void fillUdpHeaders(struct udp_headers *udp) {
 
-  udp->src_port = htons(CLIENT_PORT);
-  udp->dst_port = htons(SERVER_PORT);
-  udp->check_sum = 0;
-  memcpy(udp->payload, MESSAGE, strlen(MESSAGE));
-  udp->len = htons(8 + strlen(MESSAGE));
+  udp->src_port   = htons(CLIENT_PORT);
+  udp->dst_port   = htons(SERVER_PORT);
+  udp->check_sum  = 0;
+  udp->len        = htons(8 + strlen(MESSAGE));
 
+  /*copy message to payload */
+  memcpy(udp->payload, MESSAGE, strlen(MESSAGE));
+}
+
+void fillIpHeaders(struct iphdr *ip) {
+  ip->version   = 4;
+  ip->ihl       = 5;
+  ip->tos       = 0;
+  ip->id        = 0; /* auto */
+  ip->frag_off  = htons(0x4000); /*dont fragment */
+  ip->ttl       = 64;
+  ip->protocol  = IPPROTO_UDP;
+  ip->check     = 0; /* auto */
+  ip->saddr     = 0; /* auto */
+  inet_pton(AF_INET, SERVER_ADDRESS, &ip->daddr);
 }
 
 int main(void) {
   struct sockaddr_in server;
+  struct packet packet;
   socklen_t socklen = sizeof(struct sockaddr_in);
+
+  /* Подготавливаем сокет */
   int sockfd = createSocket(&server);
 
-  struct packet packet;
-  struct iphdr ip_packet;
-  struct udp_headers udp_packet;
-
-  packet.ip_packet.version = 4;
-  packet.ip_packet.ihl = 5;
-  packet.ip_packet.tos = 0;
-  packet.ip_packet.id = 0; // auto
-  packet.ip_packet.frag_off = 0x0040; //disable fragmentation
-  packet.ip_packet.ttl = 64;
-  packet.ip_packet.protocol = IPPROTO_UDP;
-  packet.ip_packet.saddr = 0; //auto
-  inet_pton(AF_INET, SERVER_ADDRESS, &packet.ip_packet.daddr);
-
+  /* заполнение заголовков IP */
+  fillIpHeaders(&packet.ip_packet);
 
   /* заполнение заголовков UDP */
   fillUdpHeaders(&packet.udp_packet);
@@ -93,17 +97,14 @@ int main(void) {
     perror("sendto error");
     exit(1);
   }
-
-  struct packet getPacket;
-  memset(&getPacket, 0, sizeof(struct packet));
   
   while (1) {
-    if (recvfrom(sockfd, (void*)&getPacket, sizeof(struct packet), 0, (struct sockaddr*)&server, &socklen) == -1) {
+    if (recvfrom(sockfd, (void*)&packet, sizeof(struct packet), 0, (struct sockaddr*)&server, &socklen) == -1) {
       perror("recvfrom error");
       continue;
     }
 
-    struct udp_headers *udp_packet = &getPacket.udp_packet;
+    struct udp_headers *udp_packet = &packet.udp_packet;
 
 
     /* Если порт назначения мой, то обработай */
