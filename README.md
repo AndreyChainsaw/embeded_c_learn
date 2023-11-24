@@ -33,3 +33,5 @@
 14. [Лекция 23. Raw сокеты](./lection23raw/)
 
 15. [Лекция 24. Сборка ядра под ARM](./lection24BuildArm/)
+
+16. [Лекция 25. Модули ядра](./lection25/BuildModules)
